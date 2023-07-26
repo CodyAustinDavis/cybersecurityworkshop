@@ -31,8 +31,6 @@ spark.sql(f"USE cyberworkshop;")
 # MAGIC -- 'shared_link' can be a relationship
 # MAGIC
 # MAGIC
-# MAGIC -- Features: 
-# MAGIC -- User num events that were the same in last 1, 7, 30 days
 # MAGIC SELECT 
 # MAGIC *
 # MAGIC FROM bronze_logs_search
