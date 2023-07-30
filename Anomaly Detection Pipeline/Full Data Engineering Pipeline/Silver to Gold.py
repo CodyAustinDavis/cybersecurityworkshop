@@ -39,7 +39,7 @@
 
 # MAGIC %md
 # MAGIC
-# MAGIC ## Photon Key here with all these transformations and joins
+# MAGIC ## Photon is key here with all these transformations and joins
 
 # COMMAND ----------
 
@@ -82,12 +82,6 @@ spark.sql("""USE cyberworkshop;""")
 
 # MAGIC %md
 # MAGIC
-# MAGIC ## These are user level features, so aggregate at the user level (like avg login fails per day * 30 days for estimated rolling average) - no need to complex join for historical features
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC
 # MAGIC ## Then for inference on the much more narrow / smaller input batch, we can roll up features at that level at run time (i.e. doing range joins to create features for 3000 users per hour instead of 500k users all at once creating a MUCH bigger cartisian product)
 
 # COMMAND ----------
@@ -123,39 +117,6 @@ spark.sql("""USE cyberworkshop;""")
 # MAGIC FROM raw_login_stats_by_user;
 # MAGIC
 # MAGIC
-
-# COMMAND ----------
-
-# DBTITLE 1,Generating Features Relative to moment in time
-# MAGIC %sql
-# MAGIC
-# MAGIC -- What happens when we materialize the table
-# MAGIC CREATE OR REPLACE TABLE range_temp
-# MAGIC AS
-# MAGIC SELECT id AS hist_id, entity_id, event_ts FROM prod_silver_events 
-# MAGIC          WHERE entity_type = 'name'
-# MAGIC          AND event_type = 'login_failed';
-# MAGIC
-# MAGIC
-# MAGIC SELECT 
-# MAGIC curr.event_ts,
-# MAGIC curr.entity_id,
-# MAGIC curr.id,
-# MAGIC curr.entity_type,
-# MAGIC COUNT(hist.hist_id) AS num_failed_logins_rolling_7_daya
-# MAGIC FROM prod_silver_events AS curr
-# MAGIC LEFT JOIN range_temp AS hist ON curr.entity_id = hist.entity_id 
-# MAGIC           -- This kicks the join out of Photon -- Photon makes joins MUCH faster
-# MAGIC            -- AND hist.event_ts >= (curr.event_ts - INTERVAL 7 DAYS) -- using spark SortMergeJoin
-# MAGIC             AND hist.event_ts >= (curr.event_ts::long - 1*24*3600)::timestamp -- now uses shuffle hash join in Photon
-# MAGIC WHERE entity_type = 'name' 
-# MAGIC AND event_type IN ('login_attempt')
-# MAGIC
-# MAGIC GROUP BY
-# MAGIC curr.event_ts,
-# MAGIC curr.entity_id,
-# MAGIC curr.id,
-# MAGIC curr.entity_type
 
 # COMMAND ----------
 
@@ -309,4 +270,10 @@ sc.setCheckpointDir(connected_components_checkpoint)
 
 entity_connected_components = g.connectedComponents()
 
-entity_connected_components.write.format("delta").mode("overwrite").saveAsTable("prod_gold_historical_connected_components")
+(entity_connected_components
+ .write
+ .format("delta")
+ .mode("overwrite")
+ .option("delta.feature.allowColumnDefault", "supported")
+ .saveAsTable("prod_gold_historical_connected_components")
+)

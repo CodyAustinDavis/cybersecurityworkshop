@@ -6,6 +6,7 @@
 
 # COMMAND ----------
 
+# DBTITLE 1,Thin wrapper library to wrap PyOD algorithms with ML Flow
 # MAGIC %pip install databricks-kakapo
 
 # COMMAND ----------
