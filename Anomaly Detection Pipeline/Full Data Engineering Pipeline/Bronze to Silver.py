@@ -19,9 +19,9 @@
 # MAGIC
 # MAGIC
 # MAGIC #### Edges (relationships / actions): 
-# MAGIC 1. Users
-# MAGIC 2. File Paths (root locations only)
-# MAGIC 3. Shares
+# MAGIC 1. Sharing 
+# MAGIC 2. Reading/writing
+# MAGIC 3. Logins
 
 # COMMAND ----------
 
@@ -52,12 +52,23 @@ if start_over == "yes":
   print(f"Staring over Bronze --> Silver Streams...")
   dbutils.fs.rm(checkpoint_location, recurse=True)
 
+  print("Dropping and reloading nodes...")
+  spark.sql("DROP TABLE IF EXISTS prod_silver_nodes")
+
+  print("Dropping and reloading edges...")
+  spark.sql("DROP TABLE IF EXISTS prod_silver_edges")
+
+  print("Dropping and reloading silver_events")
+  spark.sql("DROP TABLE IF EXISTS prod_silver_events")
+
 # COMMAND ----------
 
 # DBTITLE 1,Define Event, Nodes and Edges Tables DDL
 # MAGIC %sql
 # MAGIC
-# MAGIC CREATE TABLE IF NOT EXISTS prod_nodes
+# MAGIC -- Liquid Clustering!!
+# MAGIC
+# MAGIC CREATE TABLE IF NOT EXISTS prod_silver_nodes
 # MAGIC (id STRING,
 # MAGIC name STRING,
 # MAGIC entity_type STRING,
@@ -71,38 +82,23 @@ if start_over == "yes":
 # MAGIC --OPTIMIZE prod_nodes ZORDER BY (id, entity_role);
 # MAGIC
 # MAGIC
-# MAGIC CREATE TABLE IF NOT EXISTS prod_edges
+# MAGIC CREATE OR REPLACE TABLE prod_silver_edges
 # MAGIC (
 # MAGIC   id STRING,
 # MAGIC   event_ts TIMESTAMP,
-# MAGIC   event_type STRING,
+# MAGIC   relationship STRING,
 # MAGIC   src STRING,
 # MAGIC   dst STRING,
-# MAGIC   status STRING,
-# MAGIC   item_shared STRING,
+# MAGIC   entity_sub_relationship STRING,
 # MAGIC   item_type_shared STRING,
+# MAGIC   status STRING,
 # MAGIC   update_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP()
 # MAGIC )
-# MAGIC PARTITIONED BY (event_type)
+# MAGIC PARTITIONED BY (relationship)
 # MAGIC TBLPROPERTIES ('delta.targetFileSize' = '16mb', 'delta.feature.allowColumnDefaults' = 'supported');
 # MAGIC
 # MAGIC --OPTIMIZE prod_edges ZORDER BY (src, dst, event_ts);
 # MAGIC
-# MAGIC /*
-# MAGIC
-# MAGIC (
-# MAGIC   id LONG,
-# MAGIC   event_ts TIMESTAMP,
-# MAGIC   role STRING,
-# MAGIC   event_type STRING,
-# MAGIC   entity_id STRING,
-# MAGIC   entity_type STRING,
-# MAGIC   metadata STRUCT<errorCode:long, itemSource:long, itemType:string, newpath:string,voldpath:string, path:string, run:boolean, token:string, trigger:long, uidOwner:string, user:string>,
-# MAGIC   update_timestamp TIMESTAMP
-# MAGIC )
-# MAGIC
-# MAGIC
-# MAGIC */
 # MAGIC
 # MAGIC CREATE TABLE IF NOT EXISTS prod_silver_events
 # MAGIC TBLPROPERTIES ('delta.targetFileSize' = '16mb', 'delta.feature.allowColumnDefaults' = 'supported')
@@ -115,7 +111,7 @@ if start_over == "yes":
 # COMMAND ----------
 
 # DBTITLE 1,Read Stream for New Data
-bronze_df = spark.readStream.table("prod_streaming_bronze_logs")
+bronze_df = spark.readStream.table("prod_bronze_streaming_logs")
 
 # COMMAND ----------
 
@@ -134,9 +130,9 @@ def controllerFunction(input_df, id):
     WITH new_nodes AS (
       -- The Share Object Node
       SELECT DISTINCT 
-      metadata.itemSource AS id,
-      metadata.itemSource AS name,
-      CONCAT('share_object_', metadata.itemType) AS entity_type,
+      CONCAT('share_obj_', metadata.itemSource) AS id,
+      CONCAT('share_obj_', metadata.itemSource) AS name,
+      CONCAT('share_obj_', metadata.itemType) AS entity_type,
       null AS entity_role
       FROM new_events
       WHERE entity_type = 'name'
@@ -147,9 +143,9 @@ def controllerFunction(input_df, id):
       
       -- The user node
       SELECT DISTINCT 
-      entity_id AS id,
-      entity_id AS name,
-      entity_type AS entity_type,
+      CONCAT('user_', entity_id) AS id,
+      CONCAT('user_', entity_id) AS name,
+      'user' AS entity_type,
       role AS entity_role
       FROM new_events
       WHERE entity_type = 'name'
@@ -159,8 +155,8 @@ def controllerFunction(input_df, id):
 
       -- File root folder node
       SELECT DISTINCT
-      CASE WHEN length(split(metadata.path, "/")[0]) < 1 THEN  split(metadata.path, "/")[1] ELSE split(metadata.path, "/")[0] END AS id,
-      CASE WHEN length(split(metadata.path, "/")[0]) < 1 THEN  split(metadata.path, "/")[1] ELSE split(metadata.path, "/")[0] END AS name,
+      CONCAT('root_folder_', CASE WHEN length(split(metadata.path, "/")[0]) < 1 THEN  split(metadata.path, "/")[1] ELSE split(metadata.path, "/")[0] END) AS id,
+      CONCAT('root_folder_', CASE WHEN length(split(metadata.path, "/")[0]) < 1 THEN  split(metadata.path, "/")[1] ELSE split(metadata.path, "/")[0] END) AS name,
       'root_folder' AS entity_type,
       NULL AS entity_role
       FROM new_events
@@ -169,7 +165,7 @@ def controllerFunction(input_df, id):
       AND length(metadata.path) > 1
       )
 
-    MERGE INTO prod_nodes AS target 
+    MERGE INTO prod_silver_nodes AS target 
     USING (SELECT *, current_timestamp() AS update_timestamp FROM new_nodes) AS source
     ON source.id = target.id
     AND source.name = target.name
@@ -189,10 +185,10 @@ def controllerFunction(input_df, id):
     SELECT 
     DISTINCT id AS id,
     event_ts,
-    event_type,
-    metadata.uidOwner AS src,
-    metadata.token AS dst,
-    metadata.itemSource AS item_shared,
+    event_type AS relationship,
+    CONCAT('user_', metadata.uidOwner) AS src,
+    CONCAT('share_obj_', metadata.itemSource) AS dst, -- user --> (shared to user) --> share_object
+    CONCAT('user_', metadata.token) AS entity_sub_relationship,
     metadata.itemType AS item_type_shared,
     CASE WHEN metadata.errorCode IS NULL OR metadata.errorCode = '200' THEN 'success' ELSE 'failed' END AS status
     FROM new_events
@@ -205,10 +201,10 @@ def controllerFunction(input_df, id):
     SELECT 
     DISTINCT id AS id,
     event_ts,
-    event_type,
-    metadata.token AS src,
-    metadata.uidOwner AS dst,
-    metadata.itemSource AS item_shared,
+    event_type AS relationship,
+    CONCAT('share_obj_', metadata.itemSource) AS src,
+    CONCAT('user_', metadata.token) AS dst,
+    CONCAT('user_', metadata.uidOwner) AS entity_sub_relationship,
     metadata.itemType AS item_type_shared,
     CASE WHEN metadata.errorCode IS NULL OR metadata.errorCode = '200' THEN 'success' ELSE 'failed' END AS status
     FROM new_events
@@ -221,10 +217,10 @@ def controllerFunction(input_df, id):
     DISTINCT 
     id AS id,
     event_ts,
-    event_type,
-    entity_id AS src,
-    CASE WHEN length(split(metadata.path, "/")[0]) < 1 THEN  split(metadata.path, "/")[1] ELSE split(metadata.path, "/")[0] END  AS dst,
-    metadata.path AS item_shared,
+    event_type AS relationship,
+    CONCAT('user_', entity_id) AS src,
+    CONCAT('root_folder_', CASE WHEN length(split(metadata.path, "/")[0]) < 1 THEN  split(metadata.path, "/")[1] ELSE split(metadata.path, "/")[0] END)  AS dst,
+    metadata.path AS entity_sub_relationship,
     'local_file' AS item_type_shared,
     CASE WHEN metadata.errorCode IS NULL OR metadata.errorCode = '200' THEN 'success' ELSE 'failed' END AS status 
     FROM new_events
@@ -234,11 +230,11 @@ def controllerFunction(input_df, id):
 
     )
 
-    MERGE INTO prod_edges AS target 
+    MERGE INTO prod_silver_edges AS target 
     USING (SELECT *, current_timestamp() AS update_timestamp FROM new_edges) AS source
     ON source.id = target.id
     AND source.event_ts = target.event_ts
-    AND source.event_type = target.event_type
+    AND source.relationship = target.relationship
     WHEN MATCHED THEN UPDATE SET *
     WHEN NOT MATCHED THEN INSERT *;
 
@@ -258,10 +254,11 @@ def controllerFunction(input_df, id):
 
 
   ### Optimize tables after merges
-  spark_batch.sql("""OPTIMIZE prod_nodes ZORDER BY (id, entity_role);""")
-  spark_batch.sql("""OPTIMIZE prod_edges ZORDER BY (src, dst, event_ts);""")
+  spark_batch.sql("""OPTIMIZE prod_silver_nodes ZORDER BY (id, entity_role);""")
+  spark_batch.sql("""OPTIMIZE prod_silver_edges ZORDER BY (src, dst, event_ts);""")
   spark_batch.sql("""OPTIMIZE prod_silver_events ZORDER BY (entity_type, event_ts, entity_id);""")
 
+  ## Show what this looks like for Liquid clusters as well - nothing
 
   print("Pipeline Refresh Graph and Event Model Complete!")
 

@@ -39,32 +39,10 @@ if start_over == "yes":
 
 # COMMAND ----------
 
-# MAGIC %sql
-# MAGIC
-# MAGIC SELECT * FROM raw_logs WHERE uidType = 'ipaddress';
-
-# COMMAND ----------
-
 # DBTITLE 1,Define Readstream
 
 df_raw = (spark.readStream.table("cyberworkshop.raw_logs")
 )
-
-# COMMAND ----------
-
-
-CREATE OR REPLACE TABLE bronze_logs
-PARTITIONED BY (entity_type, role) -- by customer / low cardinality level of isolation
-AS
-SELECT 
-id, 
-to_timestamp(time) AS event_ts,
-role, 
-type AS event_type,
-uid AS entity_id,
-uidType AS entity_type,
-params AS metadata
- FROM raw_logs
 
 # COMMAND ----------
 
@@ -87,18 +65,18 @@ df_clean = (df_raw.select("id",
  .partitionBy("entity_type", "role")
  .option("checkpointLocation", checkpoint_location)
  .trigger(once=True) ## availableNow=True, processingTime = "X mins/sec/hour"
- .toTable("cyberworkshop.prod_streaming_bronze_logs")
+ .toTable("cyberworkshop.prod_bronze_streaming_logs")
  .awaitTermination() ## Do not run downstream commands until stream finishes
 )
 
 # COMMAND ----------
 
 # DBTITLE 1,Optimize Table once Stream is done
-spark.sql("""ALTER TABLE cyberworkshop.prod_streaming_bronze_logs SET TBLPROPERTIES ('delta.targetFileSize' = '16mb');""")
-spark.sql("""OPTIMIZE cyberworkshop.prod_streaming_bronze_logs ZORDER BY (event_ts, entity_id);""")
+spark.sql("""ALTER TABLE cyberworkshop.prod_bronze_streaming_logs SET TBLPROPERTIES ('delta.targetFileSize' = '16mb');""")
+spark.sql("""OPTIMIZE cyberworkshop.prod_bronze_streaming_logs ZORDER BY (event_ts, entity_id);""")
 
 # COMMAND ----------
 
 # MAGIC %sql
 # MAGIC
-# MAGIC DESCRIBE HISTORY cyberworkshop.prod_streaming_bronze_logs
+# MAGIC DESCRIBE HISTORY cyberworkshop.prod_bronze_streaming_logs

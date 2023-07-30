@@ -34,6 +34,11 @@ dbutils.fs.ls('dbfs:/databricks-datasets/sample_logs/')
 
 # COMMAND ----------
 
+# DBTITLE 1,Scale this by 100x  for benchmarking
+print(spark.read.text("dbfs:/databricks-datasets/sample_logs/*").count())
+
+# COMMAND ----------
+
 # DBTITLE 1,Scala RDD standard functions
 # MAGIC %scala 
 # MAGIC import org.apache.spark.sql.types._;
@@ -144,9 +149,4 @@ df_agg_by_ip_status_python = df_cleaned.groupBy(col("ip"), col("status")).agg(co
 
 df_agg_by_ip_python.write.mode("overwrite").csv("dbfs:/temp/workshop/df/python/ip_count")
 df_agg_by_ip_status_python.write.mode("overwrite").csv("dbfs:/temp/workshop/df/python/ip_status_count")
-
-
-# COMMAND ----------
-
-# DBTITLE 1,Python custom map functions (in python udfs, and scala udfs)
 
