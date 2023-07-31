@@ -1,4 +1,16 @@
 # Databricks notebook source
+# MAGIC %md
+# MAGIC
+# MAGIC ## Acquire Example UBA Data from Public Source
+
+# COMMAND ----------
+
+dbutils.widgets.dropdown("StartOver", "yes", ["yes", "no"])
+
+start_over = dbutils.widgets.get("StartOver")
+
+# COMMAND ----------
+
 # MAGIC %sh mkdir -p /dbfs/FileStore/cyberworkshop/clue/
 
 # COMMAND ----------
@@ -55,6 +67,10 @@ df_raw = (
     .schema(clue_schema)
     .load("dbfs:/FileStore/cyberworkshop/clue/clue.json")
 )
+
+
+if start_over = "yes":
+  spark.sql(f"DROP DATABASE IF EXISTS cyberworkshop CASCADE;")
 
 
 spark.sql(f"CREATE DATABASE IF NOT EXISTS cyberworkshop")

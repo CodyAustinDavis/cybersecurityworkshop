@@ -261,19 +261,10 @@ display(g.find("(a)-[e]->(b); (b)-[e2]->(a)"))
 
 # COMMAND ----------
 
-## 1.8 mins Photon - COLD - 32 cores m6gd
-
-##  - DBR - COLD - 32 cores m6gd
-
+# DBTITLE 1,Generate Other Features based on more nuanced graph algoritms
 connected_components_checkpoint = f"dbfs:/FileStore/cyberworkshop/checkpoints/connected_components/"
 sc.setCheckpointDir(connected_components_checkpoint)
 
 entity_connected_components = g.connectedComponents()
 
-(entity_connected_components
- .write
- .format("delta")
- .mode("overwrite")
- .option("delta.feature.allowColumnDefault", "supported")
- .saveAsTable("prod_gold_historical_connected_components")
-)
+display(entity_connected_components)
