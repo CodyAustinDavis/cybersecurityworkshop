@@ -14,5 +14,5 @@ Throughout the workshop the user will use Delta, Photon, ML Flow, Jobs/Workflow,
 ### Architecture of Pipeline
 The architecture is as follows: 
 
-![alt text](https://github.com/CodyAustinDavis/cybersecurityworkshop/blob/main/image.jpg?raw=true)
+![alt text](https://github.com/CodyAustinDavis/cybersecurityworkshop/blob/main/assets/architecture_diagram.png?raw=true)
 
