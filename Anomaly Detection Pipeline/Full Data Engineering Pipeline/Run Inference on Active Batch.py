@@ -228,6 +228,6 @@ final_batch_predictions = generate_predictions(features_df)
 (final_batch_predictions
  .write
  .format("delta")
- .mode("append")
+ .mode("overwrite")
  .saveAsTable("prod_anomaly_predictions")
 )
