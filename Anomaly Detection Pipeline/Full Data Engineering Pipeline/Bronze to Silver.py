@@ -103,7 +103,7 @@ if start_over == "yes":
 # MAGIC CREATE TABLE IF NOT EXISTS prod_silver_events
 # MAGIC TBLPROPERTIES ('delta.targetFileSize' = '16mb', 'delta.feature.allowColumnDefaults' = 'supported')
 # MAGIC AS
-# MAGIC SELECT * FROM prod_streaming_bronze_logs WHERE 1=2
+# MAGIC SELECT * FROM prod_bronze_streaming_logs WHERE 1=2
 # MAGIC ;
 # MAGIC --OPTIMIZE prod_silver_events ZORDER BY (entity_type, event_ts, entity_id);
 # MAGIC
