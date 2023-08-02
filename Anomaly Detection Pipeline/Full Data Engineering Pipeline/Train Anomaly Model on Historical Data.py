@@ -3,6 +3,8 @@
 # MAGIC
 # MAGIC
 # MAGIC ## Build Training / Test Set on Up-to-date historical feature data
+# MAGIC
+# MAGIC Here we will use a light-wight wrapper for PyOD to implement over 40 algorithms for anomaly detections such as (kNN (many variations, INNE, ECOD, Isolation Forest, and Many More))
 
 # COMMAND ----------
 
