@@ -231,3 +231,10 @@ final_batch_predictions = generate_predictions(features_df)
  .mode("overwrite")
  .saveAsTable("prod_anomaly_predictions")
 )
+
+# COMMAND ----------
+
+# DBTITLE 1,Visualize Anomaly Distributions
+# MAGIC %sql
+# MAGIC
+# MAGIC SELECt * FROM prod_anomaly_predictions

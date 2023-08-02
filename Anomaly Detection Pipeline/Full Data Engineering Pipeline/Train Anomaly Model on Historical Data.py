@@ -146,7 +146,7 @@ uid = uuid.uuid4().hex
 
 # COMMAND ----------
 
-# DBTITLE 1,What is inside the Kakapo library? An easier wrapper for PyOD algorithms + ML Flow
+# DBTITLE 1,What is Kakapo library? An easier wrapper for PyOD algorithms + ML Flow
 
 def train_outlier_detection_example(params, model_space, X_train, X_test, y_test, ground_truth_flag):
     """
