@@ -188,6 +188,85 @@ df_agg_by_ip_status_python.write.mode("overwrite").csv("dbfs:/temp/workshop/df/p
 # MAGIC
 # MAGIC ## What if I need some very custom row-level processing in a UDF? 
 # MAGIC
-# MAGIC 1. Scala UDF in Scala
-# MAGIC 2. Python UDF in Python
-# MAGIC 3. Scala UDF in Python
+# MAGIC 1. Scala UDF in Scala - Great, if you use Data Frames wherever you can!
+# MAGIC 2. Python UDF in Python - Not great for high performance! Even with Dataframes
+# MAGIC 3. Scala UDF in Python - Great! Best of both worlds
+
+# COMMAND ----------
+
+# DBTITLE 1,Scala UDF to perform custom transform on a Row
+# MAGIC %scala 
+# MAGIC import java.time.{LocalDateTime, ZoneOffset}
+# MAGIC import java.time.format.DateTimeFormatter
+# MAGIC
+# MAGIC def cleanTimestamp(rawTs: String) : String =  {
+# MAGIC
+# MAGIC   val cleanTs : String = rawTs.replaceAll("\\[", "")
+# MAGIC   val inputFormatter = DateTimeFormatter.ofPattern("dd/MMM/yyyy:HH:mm:ss")
+# MAGIC   val outputFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")
+# MAGIC
+# MAGIC   val localDateTime = LocalDateTime.parse(cleanTs, inputFormatter)
+# MAGIC   val utcDateTime = localDateTime.atOffset(ZoneOffset.UTC)
+# MAGIC
+# MAGIC   outputFormatter.format(utcDateTime)
+# MAGIC
+# MAGIC }
+# MAGIC
+# MAGIC
+# MAGIC spark.udf.register("cleanTimestamp", cleanTimestamp(_))
+
+# COMMAND ----------
+
+from pyspark.sql.functions import *
+
+# COMMAND ----------
+
+from datetime import datetime
+from dateutil import parser
+import pytz
+
+
+@udf("string")
+def clean_timestamp_python(raw_ts):
+  
+  input_format = "%d/%b/%Y:%H:%M:%S"
+  output_format = "%Y-%m-%dT%H:%M:%S"
+  clean_ts = str(raw_ts).replace("[", "")
+
+  dt_object = datetime.strptime(clean_ts, input_format)
+
+  input_timezone = pytz.timezone('UTC')
+  dt_object = input_timezone.localize(dt_object)
+
+  utc_datetime = dt_object.astimezone(pytz.utc)
+
+  output_ts = utc_datetime.strftime(output_format)
+
+  return str(output_ts)
+
+# COMMAND ----------
+
+df_cleaned.createOrReplaceTempView("df_cleaned")
+
+display(df_cleaned)
+
+# COMMAND ----------
+
+# MAGIC %python 
+# MAGIC
+# MAGIC df_clean_ts = spark.sql("""SELECT timestamp_raw, cleanTimestamp(timestamp_raw) AS clean_ts FROM df_cleaned""")
+# MAGIC
+# MAGIC ## Continue doing stuff in Python Data Frames
+# MAGIC
+# MAGIC display(df_clean_ts)
+
+# COMMAND ----------
+
+df_clean_ts_python_udf = (df_cleaned
+                          .select("timestamp_raw")
+                          .withColumn("clean_ts", clean_timestamp_python(col("timestamp_raw")))
+)
+
+## Continue doing stuff in Python Data Frames
+
+display(df_clean_ts_python_udf)
