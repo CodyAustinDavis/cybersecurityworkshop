@@ -69,7 +69,7 @@ df_raw = (
 )
 
 
-if start_over = "yes":
+if start_over == "yes":
   spark.sql(f"DROP DATABASE IF EXISTS cyberworkshop CASCADE;")
 
 

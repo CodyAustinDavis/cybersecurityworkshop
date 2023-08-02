@@ -34,7 +34,7 @@ dbutils.fs.ls('dbfs:/databricks-datasets/sample_logs/')
 
 # COMMAND ----------
 
-# DBTITLE 1,Scale this by 100x  for benchmarking
+# DBTITLE 1,Records in File
 print(spark.read.text("dbfs:/databricks-datasets/sample_logs/*").count())
 
 # COMMAND ----------
@@ -181,3 +181,13 @@ print(df_agg_by_ip_python.collect())
 df_agg_by_ip_python.write.mode("overwrite").csv("dbfs:/temp/workshop/df/python/ip_count")
 df_agg_by_ip_status_python.write.mode("overwrite").csv("dbfs:/temp/workshop/df/python/ip_status_count")
 
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC
+# MAGIC ## What if I need some very custom row-level processing in a UDF? 
+# MAGIC
+# MAGIC 1. Scala UDF in Scala
+# MAGIC 2. Python UDF in Python
+# MAGIC 3. Scala UDF in Python
