@@ -246,7 +246,11 @@ def clean_timestamp_python(raw_ts):
 
 # COMMAND ----------
 
-df_cleaned.createOrReplaceTempView("df_cleaned")
+df_cleaned.write.format("delta").mode("overwrite").saveAsTable("df_cleaned")
+
+df_cleaned_table = spark.table("df_cleaned")
+
+df_cleaned_table.createOrReplaceTempView("df_cleaned_table")
 
 display(df_cleaned)
 
@@ -254,7 +258,7 @@ display(df_cleaned)
 
 # MAGIC %python 
 # MAGIC
-# MAGIC df_clean_ts = spark.sql("""SELECT timestamp_raw, cleanTimestamp(timestamp_raw) AS clean_ts FROM df_cleaned""")
+# MAGIC df_clean_ts = spark.sql("""SELECT *, cleanTimestamp(timestamp_raw) AS clean_ts FROM df_cleaned_table""")
 # MAGIC
 # MAGIC ## Continue doing stuff in Python Data Frames
 # MAGIC
@@ -262,11 +266,34 @@ display(df_cleaned)
 
 # COMMAND ----------
 
-df_clean_ts_python_udf = (df_cleaned
-                          .select("timestamp_raw")
+df_clean_ts_python_udf = (df_cleaned_table
+                          .select("*")
                           .withColumn("clean_ts", clean_timestamp_python(col("timestamp_raw")))
 )
 
 ## Continue doing stuff in Python Data Frames
 
 display(df_clean_ts_python_udf)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC
+# MAGIC ## Pivoting Spark Plans in Photon
+
+# COMMAND ----------
+
+# DBTITLE 1,What is happening here? Is Photon Helpful
+from pyspark.sql.functions import first
+
+## Generally Pretty expensive
+display(df_clean_ts
+ .withColumn("date", col("clean_ts").cast("date"))
+    .groupby(df_clean_ts.ip, df_clean_ts.clean_ts)
+    .pivot("date")
+    .agg(first("user_id"))
+    )
+
+# COMMAND ----------
+
+display(df_clean_ts)

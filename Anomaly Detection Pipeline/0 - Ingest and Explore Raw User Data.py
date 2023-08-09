@@ -80,10 +80,27 @@ df_raw.write.mode("overwrite").saveAsTable("cyberworkshop.raw_logs")
 
 # COMMAND ----------
 
+spark.sql(f"CREATE DATABASE IF NOT EXISTS cyberworkshop")
+spark.sql(f"USE cyberworkshop;")
+
+# COMMAND ----------
+
 # DBTITLE 1,Optimizing table layout for query performance
 # MAGIC %sql
 # MAGIC
 # MAGIC SELECT COUNT(0) FROM raw_logs
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC
+# MAGIC DESCRIBE HISTORY raw_logs
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC
+# MAGIC SELECT * FROM raw_logs
 
 # COMMAND ----------
 
@@ -126,9 +143,6 @@ df_raw.write.mode("overwrite").saveAsTable("cyberworkshop.raw_logs")
 # DBTITLE 1,What are some of these values?
 # MAGIC %sql
 # MAGIC
-# MAGIC SELECT DISTINCT entity_type FROM bronze_logs;
-# MAGIC
-# MAGIC SELECT DISTINCT role FROM bronze_logs;
 # MAGIC
 # MAGIC -- Get unique users/entities
 # MAGIC SELECT entity_id, COUNT(0) AS num_events FROM bronze_logs GROUP BY entity_id ORDER BY num_events DESC;
@@ -298,6 +312,83 @@ spark.sql("USE SCHEMA cyberworkshop;")
 # MAGIC SELECT
 # MAGIC *
 # MAGIC FROM bronze_logs_search
+# MAGIC WHERE 
+# MAGIC WHERE entity_id = 'fast-coffee-ocelot-arbitrator'
+# MAGIC AND event_ts BETWEEN '2020-01-01 00:00:00'::timestamp AND '2023-01-01 00:00:00'::timestamp
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC
+# MAGIC ## Liquid Partitioning
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC
+# MAGIC CREATE OR REPLACE TABLE bronze_logs_search_liquid
+# MAGIC TBLPROPERTIES ('delta.targetFileSize' = '16mb')
+# MAGIC CLUSTER BY (event_ts, entity_id)
+# MAGIC AS
+# MAGIC SELECT * FROM bronze_logs;
+# MAGIC
+# MAGIC
+# MAGIC -- We went from a just 1 file to 60, that is better! 
+# MAGIC OPTIMIZE bronze_logs_search_liquid;
+# MAGIC
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC
+# MAGIC CREATE OR REPLACE TABLE bronze_logs_search_liquid_default_file_size
+# MAGIC CLUSTER BY (event_ts, entity_id)
+# MAGIC AS
+# MAGIC SELECT * FROM bronze_logs;
+# MAGIC
+# MAGIC
+# MAGIC -- We went from a just 1 file to 60, that is better! 
+# MAGIC OPTIMIZE bronze_logs_search_liquid_default_file_size;
+# MAGIC
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC
+# MAGIC OPTIMIZE bronze_logs_search_liquid_default_file_size;
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC
+# MAGIC ANALYZE TABLE bronze_logs_search_liquid COMPUTE STATISTICS FOR COLUMNS entity_id, event_ts
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC
+# MAGIC /*
+# MAGIC
+# MAGIC Higher filtering!
+# MAGIC
+# MAGIC files pruned	72
+# MAGIC files read	5
+# MAGIC max distance between the positions of scanned columns in the relation total (min, med, max)	6 (0, 0, 6)
+# MAGIC max partition size chosen total (min, med, max)	0.0 B (0.0 B, 0.0 B, 0.0 B)
+# MAGIC num early close	3
+# MAGIC number of deletion vector rows read from disk cache total (min, med, max)	0 (0, 0, 0)
+# MAGIC number of deletion vector rows read from memory cache total (min, med, max)	0 (0, 0, 0)
+# MAGIC number of deletion vector rows read total (min, med, max)	0 (0, 0, 0)
+# MAGIC number of deletion vectors read from disk cache total (min, med, max)	0 (0, 0, 0)
+# MAGIC number of deletion vectors read from memory cache total (min, med, max)	0 (0, 0, 0)
+# MAGIC number of deletion vectors read total (min, med, max)	0 (0, 0, 0)
+# MAGIC number of output batches	72
+# MAGIC
+# MAGIC
+# MAGIC */
+# MAGIC SELECT
+# MAGIC *
+# MAGIC FROM bronze_logs_search_liquid
 # MAGIC WHERE 
 # MAGIC WHERE entity_id = 'fast-coffee-ocelot-arbitrator'
 # MAGIC AND event_ts BETWEEN '2020-01-01 00:00:00'::timestamp AND '2023-01-01 00:00:00'::timestamp
